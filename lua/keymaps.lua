@@ -5,6 +5,9 @@ lvim.builtin.which_key.mappings["t"] = {
   f = { "<cmd>toggleterm direction=float<CR>", "Float" },
 }
 
+lvim.builtin.which_key.mappings[" "] = { "<cmd>Telescope find_files<CR>", "Find files" }
+
+
 lvim.builtin.which_key.mappings["s"] = {
   name = "Split",
   h = { ":split<CR>", "Horizontal" },
@@ -15,15 +18,46 @@ lvim.builtin.which_key.mappings["o"] = { "<cmd>AerialToggle!<CR>", "Toggle outli
 
 lvim.builtin.which_key.mappings["d"] = {
   name = "Debug",
-  b = { require("dap").toggle_breakpoint, "Toggle breakpoint" },
-  c = { require("dap").continue, "Continue / start" },
-  a = { require("dap").run_to_cursor, "Run to cursor" },
-  i = { require("dap").step_into, "Step into" },
-  o = { require("dap").step_over, "Step over" },
-  O = { require("dap").step_out, "Step out" },
-  r = { require("dap").repl.open, "REPL" },
-  l = { require("dap").run_last, "Run last" },
-  u = { require("dapui").toggle, "Toggle UI" },
+  b = { function() require("dap").toggle_breakpoint() end, "Toggle Breakpoint" },
+  c = { function() require("dap").continue() end, "Continue / Start" },
+  C = { function() require("dap").run_to_cursor() end, "Run to Cursor" },
+  a = { function() 
+    local launch_json_path = vim.fn.getcwd() .. "/.vscode/launch.json"
+    vim.notify("Checking for launch.json at: " .. launch_json_path, vim.log.levels.INFO)
+    if vim.fn.filereadable(launch_json_path) then
+      vim.notify("launch.json found! Attempting to load configurations.", vim.log.levels.INFO)
+      local dap_vscode = require("dap.ext.vscode")
+      local js_based_languages = {
+        "typescript",
+        "javascript",
+        "typescriptreact",
+        "javascriptreact",
+        "vue",
+      }
+      -- Add "node" to the mapping as your launch.json uses type "node"
+      dap_vscode.load_launchjs(nil, {
+        ["pwa-node"] = js_based_languages,
+        ["chrome"] = js_based_languages,
+        ["pwa-chrome"] = js_based_languages,
+        ["node"] = js_based_languages, -- Explicitly add 'node' type mapping
+      })
+      vim.notify("launch.json configurations loaded. Select a configuration.", vim.log.levels.INFO)
+    else
+      vim.notify("launch.json NOT found at: " .. launch_json_path, vim.log.levels.WARN)
+    end
+    require("dap").continue()
+  end, "Run with Args (launch.json)" },
+  i = { function() require("dap").step_into() end, "Step Into" },
+  o = { function() require("dap").step_over() end, "Step Over" },
+  O = { function() require("dap").step_out() end, "Step Out" },
+  r = { function() require("dap").repl.toggle() end, "Toggle REPL" },
+  l = { function() require("dap").run_last() end, "Run Last" },
+  s = { function() require("dap").session() end, "Session" },
+  t = { function() require("dap").terminate() end, "Terminate" },
+  w = { function() require("dap.ui.widgets").hover() end, "Widgets" },
+  u = { function() require("dapui").toggle() end, "Toggle UI" },
+  k = { function() require("dap").up() end, "Up (Stack Frame)" },
+  j = { function() require("dap").down() end, "Down (Stack Frame)" },
 }
 
 lvim.builtin.which_key.mappings["<c-h>"] = { "<cmd><C-U>TmuxNavigateLeft<cr>", "Navigate left" }

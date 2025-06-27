@@ -1,0 +1,61 @@
+---@file plugins/dap-vscode-js.lua
+
+return {
+  "mxsdev/nvim-dap-vscode-js",
+  ft = { "javascript", "typescript", "javascriptreact", "typescriptreact" },
+  dependencies = {
+    "mfussenegger/nvim-dap",
+    "rcarriga/nvim-dap-ui",
+    -- ensures the adapter is downloaded & compiled
+    "jay-babu/mason-nvim-dap.nvim",
+  },
+
+  build = function()
+    -- (re)install & compile js-debug when the adapter is missing or half-built
+    local registry = require("mason-registry")
+    local pkg = registry.get_package("js-debug-adapter")
+    if not pkg:is_installed() or
+        vim.fn.empty(vim.fn.glob(pkg:get_install_path() .. "/out/src/vsDebugServer.js")) == 1
+    then
+      pkg:install()
+    end
+  end,
+
+  config = function()
+    require("dap-vscode-js").setup {
+      debugger_path     = vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter",
+      adapters          = { "pwa-node", "pwa-chrome", "node-terminal" },
+      log_file_path     = vim.fn.stdpath("cache") .. "/dap-vscode-js.log",
+      log_file_level    = vim.log.levels.DEBUG,
+      log_console_level = vim.log.levels.ERROR,
+    }
+
+    local dap, pick = require("dap"), require("dap.utils").pick_process
+    local base = {
+      cwd        = "${workspaceFolder}",
+      sourceMaps = true,
+      skipFiles  = { "<node_internals>/**" },
+      protocol   = "inspector",
+    }
+
+    for _, ft in ipairs { "typescript", "typescriptreact", "javascript", "javascriptreact" } do
+      dap.configurations[ft] = {
+        vim.tbl_extend("force", base, {
+          type       = "pwa-node",
+          request    = "attach",
+          name       = "🔥 Attach Docker EDI2 backend",
+          host       = "localhost",
+          port       = 9229,
+          cwd        = "${workspaceFolder}/backend",
+          remoteRoot = "/app",
+        }),
+        vim.tbl_extend("force", base, {
+          type      = "pwa-node",
+          request   = "attach",
+          name      = "Attach to process",
+          processId = pick,
+        }),
+      }
+    end
+  end,
+}
