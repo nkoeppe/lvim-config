@@ -4,6 +4,9 @@ local files      = vim.fn.readdir(plugin_dir)
 
 lvim.plugins     = lvim.plugins or {}
 
+table.insert(lvim.plugins, { "nvim-tree/nvim-web-devicons", lazy = true })
+
+
 for _, file in ipairs(files) do
   if file:sub(-4) == ".lua" and file ~= "init.lua" then
     local ok, spec = pcall(dofile, plugin_dir .. "/" .. file)

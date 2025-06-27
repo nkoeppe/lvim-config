@@ -11,3 +11,5 @@ for _, m in ipairs(modules) do
     vim.notify(("Fehler beim Laden von %s:\n%s"):format(m, err), vim.log.levels.ERROR)
   end
 end
+
+vim.notify("Test notification from config.lua", vim.log.levels.INFO)

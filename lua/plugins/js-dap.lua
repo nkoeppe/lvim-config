@@ -10,6 +10,10 @@ return {
     require("dap-vscode-js").setup {
       debugger_path = vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter",
       adapters      = { "pwa-node", "pwa-chrome", "node-terminal" },
+      -- Fix for nvim-notify API change
+      log_file_path = vim.fn.stdpath("cache") .. "/dap-vscode-js.log",
+      log_file_level = false,
+      log_console_level = "error",
     }
 
     local dap = require "dap"

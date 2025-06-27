@@ -3,7 +3,7 @@
 vim.opt.relativenumber = true
 vim.opt.wrap = true
 
-lvim.log.level = "warn"
+lvim.log.level = "info"
 lvim.format_on_save.enabled = true
 
 lvim.colorscheme = "catppuccin"
