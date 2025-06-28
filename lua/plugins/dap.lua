@@ -1,266 +1,117 @@
-local js_based_languages = {
-  "typescript",
-  "javascript",
-  "typescriptreact",
-  "javascriptreact",
-  "vue",
-}
-
+-- ~/.config/lvim/lua/plugins/dap.lua
 return {
-  "mfussenegger/nvim-dap",
-  dependencies = {
-    { "nvim-neotest/nvim-nio" },
-    -- Install the vscode-js-debug adapter
-    {
-      "microsoft/vscode-js-debug",
-      -- After install, build it and rename the dist directory to out
-      build = "npm install --legacy-peer-deps --no-save && npx gulp vsDebugServerBundle && rm -rf out && mv dist out",
-      version = "1.*",
-    },
-    {
-      "mxsdev/nvim-dap-vscode-js",
-      config = function()
-        ---@diagnostic disable-next-line: missing-fields
-        require("dap-vscode-js").setup({
-          -- Path of node executable. Defaults to $NODE_PATH, and then "node"
-          -- node_path = "node",
 
-          -- Path to vscode-js-debug installation.
-          debugger_path = vim.fn.resolve(vim.fn.stdpath("data") .. "/lazy/vscode-js-debug"),
-
-          -- Command to use to launch the debug server. Takes precedence over "node_path" and "debugger_path"
-          -- debugger_cmd = { "js-debug-adapter" },
-
-          -- which adapters to register in nvim-dap
-          adapters = {
-            "chrome",
-            "pwa-node",
-            "pwa-chrome",
-            "pwa-msedge",
-            "pwa-extensionHost",
-            "node-terminal",
-          },
-
-          -- Path for file logging
-          -- log_file_path = "(stdpath cache)/dap_vscode_js.log",
-
-          -- Logging level for output to file. Set to false to disable logging.
-          -- log_file_level = false,
-
-          -- Logging level for output to console. Set to false to disable console output.
-          -- log_console_level = vim.log.levels.ERROR,
-        })
-      end,
-    },
-    {
-      "Joakker/lua-json5",
-      build = "./install.sh",
+  -- Core client + comfy keymaps in the *same* spec
+  {
+    "mfussenegger/nvim-dap",
+    keys = { -- nice UX bindings
+      {
+        "<F5>",
+        function()
+          -- try to bring in launch.json the first time you debug
+          require("user.load_launch_json").load()
+          require("dap").continue()
+        end,
+        desc = "DAP • Continue (auto-load launch.json)"
+      },
+      { "<F10>", function() require("dap").step_over() end, desc = "DAP • Step over" },
+      { "<F11>", function() require("dap").step_into() end, desc = "DAP • Step into" },
+      { "<F12>", function() require("dap").step_out() end, desc = "DAP • Step out" },
+      { "<leader>db", function() require("dap").toggle_breakpoint() end, desc = "DAP • Toggle breakpoint" },
+      {
+        "<leader>dB",
+        function()
+          require("dap").set_breakpoint(vim.fn.input("Breakpoint condition: "))
+        end,
+        desc = "DAP • Conditional breakpoint"
+      },
+      { "<leader>dr", function() require("dap").repl.toggle() end, desc = "DAP • Toggle REPL" },
+      { "<leader>du", function() require("dapui").toggle() end, desc = "DAP • Toggle UI" },
+      {
+        "<leader>dl",
+        function() require("user.load_launch_json").load() end,
+        desc = "DAP • Load launch.json"
+      },
     },
   },
-  config = function()
-    local dap = require("dap")
 
-    vim.api.nvim_set_hl(0, "DapStoppedLine", { default = true, link = "Visual" })
+  -- Pretty side panes
+  {
+    "rcarriga/nvim-dap-ui",
+    dependencies = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" },
+    opts = { floating = { border = "rounded" } },
+    config = function(_, opts)
+      local dap, dapui = require("dap"), require("dapui")
+      dapui.setup(opts)
+      dap.listeners.after.event_initialized["dapui"] = function() dapui.open() end
+      dap.listeners.before.event_terminated["dapui"] = function() dapui.close() end
+      dap.listeners.before.event_exited["dapui"]     = function() dapui.close() end
+    end,
+  },
 
-    for name, sign in pairs({
-      Stopped = { "󰁕", "DiagnosticWarn", "DapStoppedLine" },
-      Breakpoint = { "" },
-      BreakpointCondition = { "" },
-      BreakpointRejected = { "", "DiagnosticError" },
-      LogPoint = { "" },
-    }) do
-      sign = type(sign) == "table" and sign or { sign }
-      vim.fn.sign_define(
-        "Dap" .. name,
-        { text = sign[1], texthl = sign[2] or "DiagnosticInfo", linehl = sign[3], numhl = sign[3] }
-      )
-    end
+  -- Inline virtual-text
+  { "theHamsta/nvim-dap-virtual-text",  dependencies = "mfussenegger/nvim-dap", opts = { commented = true } },
 
-    for _, language in ipairs(js_based_languages) do
-      dap.configurations[language] = {
-        -- Debug single nodejs files
-        {
-          type = "pwa-node",
-          request = "launch",
-          name = "Launch file",
-          program = "${file}",
-          cwd = vim.fn.getcwd(),
-          sourceMaps = true,
-        },
-        -- Debug nodejs processes (make sure to add --inspect when you run the process)
-        {
-          type = "pwa-node",
-          request = "attach",
-          name = "Attach",
-          processId = require("dap.utils").pick_process,
-          cwd = vim.fn.getcwd(),
-          sourceMaps = true,
-        },
-        -- Debug web applications (client side)
-        {
-          type = "pwa-chrome",
-          request = "launch",
-          name = "Launch & Debug Chrome",
-          url = function()
-            local co = coroutine.running()
-            return coroutine.create(function()
-              vim.ui.input({
-                prompt = "Enter URL: ",
-                default = "http://localhost:3000",
-              }, function(url)
-                if url == nil or url == "" then
-                  return
-                else
-                  coroutine.resume(co, url)
-                end
-              end)
-            end)
-          end,
-          webRoot = vim.fn.getcwd(),
-          protocol = "inspector",
-          sourceMaps = true,
-          userDataDir = false,
-        },
-        -- Vitest
-        {
-          type = "pwa-node",
-          request = "launch",
-          name = "Debug Vitest",
-          program = "${workspaceFolder}/node_modules/vitest/vitest.mjs",
-          args = { "run", "${file}" },
-          cwd = "${workspaceFolder}",
-          sourceMaps = true,
-          console = "integratedTerminal",
-        },
-        -- Divider for the launch.json derived configs
-        {
-          name = "----- ↓ launch.json configs ↓ -----",
-          type = "",
-          request = "launch",
-        },
+  -- Mason bridge (auto-installs js-debug)
+  {
+    "jay-babu/mason-nvim-dap.nvim",
+    dependencies = { "williamboman/mason.nvim", "mfussenegger/nvim-dap" },
+    opts = { ensure_installed = { "js-debug-adapter" }, automatic_installation = true },
+  },
+
+  -- VS Code JS/TS adapter (> 1.76 path fix)
+  {
+    "mxsdev/nvim-dap-vscode-js",
+    dependencies = "mfussenegger/nvim-dap",
+    ft = { "javascript", "typescript", "javascriptreact", "typescriptreact", "vue", "svelte" },
+    opts = function()
+      -- local registry = require("mason-registry")
+      -- local path = registry.get_package("js-debug-adapter"):get_install_path()
+      return {
+        -- debugger_path = path .. "/js-debug/src/dapDebugServer.js",
+        debugger_cmd = { "js-debug-adapter", "0" },
+        adapters = { "pwa-node", "pwa-chrome", "pwa-msedge",
+          "node-terminal", "pwa-extensionHost", "node", "chrome" },
       }
-    end
-  end,
-  dependencies = {
-    { "nvim-neotest/nvim-nio" },
-    -- Install the vscode-js-debug adapter
-    {
-      "microsoft/vscode-js-debug",
-      -- After install, build it and rename the dist directory to out
-      build = "npm install --legacy-peer-deps --no-save && npx gulp vsDebugServerBundle && rm -rf out && mv dist out",
-      version = "1.*",
-    },
-    {
-      "mxsdev/nvim-dap-vscode-js",
-      config = function()
-        ---@diagnostic disable-next-line: missing-fields
-        require("dap-vscode-js").setup({
-          -- Path of node executable. Defaults to $NODE_PATH, and then "node"
-          -- node_path = "node",
-
-          -- Path to vscode-js-debug installation.
-          debugger_path = vim.fn.resolve(vim.fn.stdpath("data") .. "/lazy/vscode-js-debug"),
-
-          -- Command to use to launch the debug server. Takes precedence over "node_path" and "debugger_path"
-          -- debugger_cmd = { "js-debug-adapter" },
-
-          -- which adapters to register in nvim-dap
-          adapters = {
-            "chrome",
-            "pwa-node",
-            "pwa-chrome",
-            "pwa-msedge",
-            "pwa-extensionHost",
-            "node-terminal",
+    end,
+    config = function(_, opts)
+      require("dap-vscode-js").setup(opts)
+      for _, lang in ipairs({ "javascript", "typescript", "javascriptreact",
+        "typescriptreact", "vue", "svelte" }) do
+        require("dap").configurations[lang] = {
+          {
+            type = "pwa-node",
+            request = "launch",
+            name = "▶ Launch file",
+            program = "${file}",
+            cwd = "${workspaceFolder}",
+            sourceMaps = true,
+            skipFiles = { "<node_internals>/**" },
           },
-
-          -- Path for file logging
-          -- log_file_path = "(stdpath cache)/dap_vscode_js.log",
-
-          -- Logging level for output to file. Set to false to disable logging.
-          -- log_file_level = false,
-
-          -- Logging level for output to console. Set to false to disable console output.
-          -- log_console_level = vim.log.levels.ERROR,
-        })
-      end,
-    },
-    {
-      "Joakker/lua-json5",
-      build = "./install.sh",
-    },
-    -- DAP UI
-    {
-      "rcarriga/nvim-dap-ui",
-      dependencies = { "nvim-neotest/nvim-nio" },
-      config = function()
-        local dapui = require("dapui")
-        dapui.setup({
-          layouts = {
-            {
-              elements = {
-                -- Elements can be strings or tables with id and size keys.
-                { id = "scopes", size = 0.25 },
-                { id = "breakpoints", size = 0.25 },
-                { id = "stacks", size = 0.25 },
-                { id = "watches", size = 0.25 },
-              },
-              size = 40,
-              position = "left",
-            },
-            {
-              elements = {
-                { id = "repl", size = 0.5 },
-                { id = "console", size = 0.5 },
-              },
-              size = 0.25,
-              position = "bottom",
-            },
+          {
+            type = "pwa-node",
+            request = "attach",
+            name = "⏸ Attach",
+            processId = require("dap.utils").pick_process,
+            cwd = "${workspaceFolder}",
+            sourceMaps = true,
+            skipFiles = { "<node_internals>/**" },
           },
-          controls = {
-            element = "repl",
-            enabled = true,
-            icons = {
-              expand = "",
-              collapsed = "",
-              expanded = "",
-            },
+          {
+            type = "pwa-node",
+            request = "launch",
+            name = "🧪 Jest current file",
+            runtimeExecutable = "node",
+            runtimeArgs = { "./node_modules/jest/bin/jest.js", "--runInBand", "${file}", "--coverage" },
+            rootPath = "${workspaceFolder}",
+            cwd = "${workspaceFolder}",
+            console = "integratedTerminal",
           },
-          floating = {
-            max_height = nil, -- Current window height
-            max_width = nil, -- Current window width
-            border = "single", -- Border style for floating windows ("single", "double", "rounded", "solid", "none")
-            mappings = {
-              close = { "q", "<Esc>" },
-            },
-          },
-          windows = {
-            elements = {
-              "scopes",
-              "breakpoints",
-              "stacks",
-              "watches",
-              "repl",
-              "console",
-            },
-            position = "right",
-            size = 60,
-          },
-          render = {
-            max_type_length = nil, -- Can be integer or nil.
-            max_value_length = nil, -- Can be integer or nil.
-          },
-        })
-        dap.listeners.after.event_initialized["dapui_config"] = function()
-          dapui.open()
-        end
-        dap.listeners.before.event_terminated["dapui_config"] = function()
-          dapui.close()
-        end
-        dap.listeners.before.event_exited["dapui_config"] = function()
-          dapui.close()
-        end
-      end,
-    },
+        }
+      end
+    end,
   },
+
+  -- Telescope integration
+  { "nvim-telescope/telescope-dap.nvim" },
 }
